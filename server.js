@@ -1,63 +1,70 @@
 import { createServer } from "http";
 import Groq from "groq-sdk";
-import "dotenv/config";
 
 const PORT = process.env.PORT || 3005;
 const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// HTTP server (required for Railway health check)
-const server = createServer((req, res) => {
-  res.writeHead(200);
-  res.end("LifeOS AI Server is running");
-});
+const server = createServer(async (req, res) => {
 
-const wss = new WebSocketServer({ server });
+  // CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
+  // Health check
+  if (req.method === "GET") {
+    res.writeHead(200);
+    res.end("LifeOS AI Server is running");
+    return;
+  }
+
+  // AI chat endpoint
+  if (req.method === "POST" && req.url === "/chat") {
+    let body = "";
+    req.on("data", chunk => body += chunk);
+    req.on("end", async () => {
+      try {
+        const { message } = JSON.parse(body);
+
+        const response = await client.chat.completions.create({
+          model: "llama3-8b-8192",
+          max_tokens: 300,
+          messages: [
+            {
+              role: "system",
+              content: `You are LifeOS, a smart personal assistant inside an Android app.
+You help users manage tasks, memories, and daily productivity.
+Keep responses short, friendly, and under 3 sentences.`
+            },
+            { role: "user", content: message }
+          ]
+        });
+
+        const reply = response.choices[0].message.content;
+        console.log("🤖 Reply:", reply);
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ reply }));
+
+      } catch (error) {
+        console.error("Error:", error);
+        res.writeHead(500);
+        res.end(JSON.stringify({ reply: "Sorry, I'm having trouble. Try again!" }));
+      }
+    });
+    return;
+  }
+
+  res.writeHead(404);
+  res.end("Not found");
+});
 
 server.listen(PORT, () => {
   console.log(`🚀 LifeOS AI Server running on port ${PORT}`);
-});
-
-wss.on("connection", (ws) => {
-  console.log("🔥 Client connected");
-
-  const history = [];
-
-  ws.on("message", async (msg) => {
-    const text = msg.toString().trim();
-    console.log("📩 Received:", text);
-
-    history.push({ role: "user", content: text });
-
-    try {
-      const response = await client.chat.completions.create({
-        model: "llama3-8b-8192",
-        max_tokens: 300,
-        messages: [
-          {
-            role: "system",
-            content: `You are LifeOS, a smart personal assistant inside an Android app.
-You help users manage tasks, memories, and daily productivity.
-Keep responses short, friendly, and under 3 sentences.
-If asked about tasks or notes, remind the user to check their Diary section.`
-          },
-          ...history
-        ]
-      });
-
-      const reply = response.choices[0].message.content;
-      history.push({ role: "assistant", content: reply });
-      if (history.length > 10) history.splice(0, 2);
-
-      console.log("🤖 Reply:", reply);
-      ws.send(reply);
-
-    } catch (error) {
-      console.error("Groq API error:", error);
-      ws.send("Sorry, I'm having trouble thinking right now. Try again!");
-    }
-  });
-
-  ws.on("close", () => {
-    console.log("❌ Client disconnected");
-  });
 });
