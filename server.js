@@ -1,5 +1,6 @@
 import { createServer } from "http";
 import Groq from "groq-sdk";
+import "dotenv/config";
 
 const PORT = process.env.PORT || 3005;
 const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
