@@ -1,5 +1,4 @@
 import { createServer } from "http";
-import { WebSocketServer } from "ws";
 import Groq from "groq-sdk";
 import "dotenv/config";
 
