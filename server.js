@@ -1,13 +1,22 @@
+import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import Groq from "groq-sdk";
-import "dotenv/config"
+import "dotenv/config";
 
 const PORT = process.env.PORT || 3005;
 const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-const wss = new WebSocketServer({ port: PORT });
+// HTTP server (required for Railway health check)
+const server = createServer((req, res) => {
+  res.writeHead(200);
+  res.end("LifeOS AI Server is running");
+});
 
-console.log(`🚀 LifeOS AI Server running on port ${PORT}`);
+const wss = new WebSocketServer({ server });
+
+server.listen(PORT, () => {
+  console.log(`🚀 LifeOS AI Server running on port ${PORT}`);
+});
 
 wss.on("connection", (ws) => {
   console.log("🔥 Client connected");
@@ -37,9 +46,7 @@ If asked about tasks or notes, remind the user to check their Diary section.`
       });
 
       const reply = response.choices[0].message.content;
-
       history.push({ role: "assistant", content: reply });
-
       if (history.length > 10) history.splice(0, 2);
 
       console.log("🤖 Reply:", reply);
